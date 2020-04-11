@@ -7,13 +7,47 @@
  </head>
  <body>
   <?php
+  function get_codec_filesize($codec,$format_table_size,$decoded_ytdl_json)
+	{
+	 $index=-1;
+	 $index_codec=0;
+	 while($codec != $index_codec) {
+	  $index++;
+	  if($index > $format_table_size)
+	  {
+		echo "BUG in get_codec_filesize";
+		break;
+	  }
+	  $index_codec=$decoded_ytdl_json->formats[$index]->format_id;
+	}
+	if($decoded_ytdl_json->formats[$index]->filesize == NULL){
+		return 0;
+    }
+    else{
+		return $decoded_ytdl_json->formats[$index]->filesize;
+    }
+  }
+  function parse_ytdl_json($link,$workdir,$videocodec,$audiocodec){
+    $ytdl_json = shell_exec("/usr/bin/youtube-dl -j ".$link);
+    $decoded_ytdl_json=json_decode($ytdl_json);
+    $format_table_size=count($decoded_ytdl_json->formats);
+    $format_table_size--;
+    if(!(empty($videocodec))){
+        $video_size=get_codec_filesize($videocodec,$format_table_size,$decoded_ytdl_json);
+        shell_exec("echo ".$video_size." > ".$workdir."/video_size");
+    }
+    if(!(empty($audiocodec))){
+        $audio_size=get_codec_filesize($audiocodec,$format_table_size,$decoded_ytdl_json);
+        shell_exec("echo ".$audio_size." > ".$workdir."/audio_size");
+    }
+  }
   function find_ytdl_process($workdir){
 	 exec("ps aux | grep -i ".$workdir." | grep -v grep", $pids);
      if(empty($pids)) {
         return 0;
      } else {
         return 1;
-     } 
+     }
   }
   function searchForFile($fileToSearchFor){
      $numberOfFiles = count(glob($fileToSearchFor));
@@ -29,23 +63,30 @@
   }
   $videocodec=$_GET['videocodec'];
   $audiocodec=$_GET['audiocodec'];
-  $video_size=$_GET['video_size'];
-  $audio_size=$_GET['audio_size'];
   //Pobiera nazwę katalogu roboczego z żądania GET
   $workdir = $_GET['workdir'];
   //Pobiera link do youtube z żądania GET
   $link = $_GET['link'];
+  if(!(empty($videocodec))){
+    $video_size=shell_exec("/bin/cat ".$workdir."/video_size");
+  }
+  if(!(empty($audiocodec))){
+    $audio_size=shell_exec("/bin/cat ".$workdir."/audio_size");
+  }
   if (file_exists($workdir)) {
   } 
   else {
     shell_exec("/bin/mkdir ".$workdir);
-    //zapisuje datę utworzenia
-    shell_exec("echo $(date +%s) > ".$workdir."/create_date");
-    //pobiera plik za pomocą youtube-dl
-    shell_exec("LC_ALL=pl_PL.UTF-8 /usr/bin/youtube-dl -o \"".$workdir."/%(title)s.%(ext)s\" -f ".$jakosc." ".$link." > /dev/null 2>&1 &");
-
+    if(!(file_exists($workdir."/*size"))){
+        parse_ytdl_json($link,$workdir,$videocodec,$audiocodec);
+    }
+    if(!(find_ytdl_process("-j ".$link))){
+        shell_exec("echo $(date +%s) > ".$workdir."/create_date");
+        //pobiera plik za pomocą youtube-dl
+        shell_exec("LC_ALL=pl_PL.UTF-8 /usr/bin/youtube-dl -o \"".$workdir."/%(title)s.%(ext)s\" -f ".$jakosc." ".$link." > /dev/null 2>&1 &");
+    }
   }
-  if(find_ytdl_process($workdir)){
+   if(find_ytdl_process($workdir)){
 	  echo("<meta http-equiv='refresh' content='1'>");
 	  echo("Trwa pobieranie<br>");
   } else {
@@ -63,26 +104,42 @@
 	echo("<input type=submit value='Kliknij po pobraniu aby usunąć'/>");
     echo("</form>");
   }  
-  if(searchForFile($workdir."/*".$videocodec."*"))
+  if(searchForFile($workdir."/*part"))
   {
-	    $current_video_size=shell_exec("ls -la ".$workdir." | grep ".$videocodec." | awk {'print $5'}");
+        if(empty($audiocodec)){
+            $current_video_size=shell_exec("ls -la ".$workdir." | grep part | awk {'print $5'}");
+            if(!($video_size == 0))
+            {
+                echo("Wideo pobrano ".round(($current_video_size/$video_size)*100)."%");
+            }
+       }
+       elseif(empty($videocodec)){
+            $current_audio_size=shell_exec("ls -la ".$workdir." | grep part | awk {'print $5'}");
+            if(!($audio_size == 0))
+            {
+                echo("Audio pobrano ".round(($current_audio_size/$audio_size)*100)."%");
+            }
+       }
+    }
+    elseif(searchForFile($workdir."/*".$videocodec."*"))
+    {
+        $current_video_size=shell_exec("ls -la ".$workdir." | grep ".$videocodec." | awk {'print $5'}");
 	    if($video_size == 0){
-			echo "Trwa pobieranie wideo";
 		}
-		else{
+		else
+		{
 			echo("Wideo pobrano ".round(($current_video_size/$video_size)*100)."%");
 		}
-  }
-    if(searchForFile($workdir."/*".$audiocodec."*"))
-  {
-	    $current_audio_size=shell_exec("ls -la ".$workdir." | grep ".$audiocodec." | awk {'print $5'}");
+    }
+    elseif(searchForFile($workdir."/*".$audiocodec."*"))
+    {
+        $current_video_size=shell_exec("ls -la ".$workdir." | grep ".$audiocodec." | awk {'print $5'}");
         if($audio_size == 0){
-			echo "<br>Trwa pobieranie audio";
 		}
 		else{
-			echo("Audio pobrano ".round(($current_audio_size/$audio_size)*100)."%");
+			echo("<br>Audio pobrano ".round(($current_audio_size/$audio_size)*100)."%");
 		}
-  }
+    }
   ?>
  </body>
 </html>
