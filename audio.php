@@ -58,7 +58,7 @@
 	workdir (nazwa katalogu roboczego)
 	videocodec (kodek wideo)
 -->
-	<form action="jakosc.php" method="GET">
+	<form action="pobierz2.php" method="GET">
 		<br>Wybierz format wideo:
 		<br><input type=text name="audiocodec" autofocus="autofocus" /><br/>
 		<input type="hidden" name="link" value="<?php echo $link; ?>">
